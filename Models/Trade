@@ -1,0 +1,20 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace TopHundredTrades.Models
+{
+    public class Trade
+    {
+        [Key]
+        public int Id { get; set; }
+        public string underlying_symbol { get; set; }
+        public string quote_datetime { get; set; }
+        public int exchange { get; set; }
+        public float trade_price { get; set; }
+        public int trade_size { get; set; }
+        public int trade_condition_id { get; set; }
+        public int canceled_trade_condition_id  { get; set; }
+        public float bid { get; set; }
+        public float ask { get; set; }
+
+    }
+}
