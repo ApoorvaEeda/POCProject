@@ -1,0 +1,113 @@
+using CsvHelper;
+using CsvHelper.Configuration;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Data;
+using System.Data.Entity;
+using System.Globalization;
+using TopHundredTrades.Data;
+using TopHundredTrades.Models;
+
+
+namespace TopHundredTrades.Controllers
+{
+    [ApiController]
+    [Route("TopHundredTradesController")]
+    public class TopHundredTradesController : ControllerBase
+    {
+        private readonly AppDbContext appDbContext;
+
+        public TopHundredTradesController(AppDbContext appDbContext)
+        {
+            this.appDbContext = appDbContext;
+        }
+
+        [HttpGet("Add")]
+        public IActionResult Add()
+        {
+            try
+            {
+                var path = $"{Directory.GetCurrentDirectory()}{@""}" + "\\" + "UnderlyingTradesData.csv";
+
+                List<Trade> trades = new List<Trade>();
+                var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+                {
+                    MissingFieldFound = null,
+                    HeaderValidated = null,
+                };
+
+                using var reader = new StreamReader(path);
+                using var csv = new CsvReader(reader, config);
+
+                trades = csv.GetRecords<Trade>()
+                            .OrderByDescending(t => t.trade_size)
+                            .Take(100)
+                            .Select((trade, index) => { trade.Id = index + 1; return trade; })
+                            .ToList();
+
+                var returnVal = InsertDatatoDB(trades);
+
+                return Ok(trades); 
+            }
+            catch (FileNotFoundException fnfEx)
+            {
+                return NotFound(new { message = $"CSV file not found: {fnfEx.Message}" }); // Return a 404 Not Found response
+            }
+            catch (Exception ex)
+            {
+                // Log the exception details
+                return StatusCode(500, new { message = $"Internal server error: {ex.Message}" }); // Return a 500 Internal Server Error response
+            }
+        }
+
+
+        [HttpGet("GetTop")]
+        public IActionResult GetTTop()
+        {
+            try
+            {
+                var topProducts = appDbContext.Trades
+                                        .OrderByDescending(p => p.trade_size)
+                                        .Take(100)
+                                        .Select(p => new { p.Id,p.underlying_symbol, p.quote_datetime,p.trade_price,p.trade_size })
+                                        .ToList();
+                return Ok(topProducts);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> InsertDatatoDB(List<Trade> trades)
+        {
+            try
+            {
+                if (trades != null && trades.Any())
+                {
+                    appDbContext.Trades.AddRange(trades);
+                    await appDbContext.SaveChangesAsync();
+                    return Ok("Data successfully inserted.");
+
+                }
+
+                return BadRequest("object instance not set");
+
+            }
+
+            catch (DbUpdateException dbEx)
+            {
+                return StatusCode(500, $"Database update error: {dbEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+
+        }
+
+    }
+}
